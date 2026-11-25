@@ -239,9 +239,9 @@ Run the Inspector on the same machine as Xentara: it looks for Xentara on the ho
 An example based on a water tank simulated model is avalailable in the folder `./xentara-lab`.  
 The model is running as python code with modbus communication, Xentara model is leveraging the modbus plugin to connect to it and read/write to registries.  Additionally an HTML dashboard is present to visualize the model live (and can drive the model, writing registers through Xentara).  
 
-![alt text](<Screenshot From 2026-11-25 14-44-51.png>)
+![alt text](images/xentara-inspector.png)  
 
-![alt text](<Screenshot From 2026-11-25 14-45-05.png>)
+![alt text](images/dashboard-water-tank.png)
 
 
 ## Troubleshooting
