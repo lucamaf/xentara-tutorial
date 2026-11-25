@@ -1,11 +1,11 @@
 #!/bin/bash
 # Runs the Xentara lab: a simulated Modbus TCP device (water-tank station) and Xentara (UBI 10 container) that reads it.
 #
-#   ./lab.sh build            build both images
+#   ./lab.sh build            build the images (simulator, Xentara, dashboard)
 #   ./lab.sh init             create ./run/config (model, config.json) and ./run/licence
 #   ./lab.sh password [user]  set the password of a Xentara user (asks for it)
-#   ./lab.sh up               start the simulator and Xentara
-#   ./lab.sh logs [name]      show the log (xentara or modbus-sim)
+#   ./lab.sh up               start the simulator, Xentara and the dashboard (http://<address>:8091)
+#   ./lab.sh logs [name]      show the log (xentara, modbus-sim or xentara-dashboard)
 #   ./lab.sh status           show the containers and the open ports
 #   ./lab.sh licence-id       print the licence ID that Xentara sees in a container on this computer
 #   ./lab.sh down             stop and remove the containers and the network
@@ -27,6 +27,7 @@ case "${1:-}" in
   build)
     $C build -t modbus-sim -f "${here}/simulator/Containerfile" "${here}/simulator"
     $C build -t xentara-ubi10 -f "${here}/container/Containerfile" "${here}/container"
+    $C build --format docker -t xentara-dashboard -f "${here}/dashboard/Containerfile" "${here}/dashboard"
     ;;
 
   init)
@@ -43,14 +44,29 @@ case "${1:-}" in
     "CORS": {
       "allowedOrigins": [
         "http://${address}:8090", "https://${address}:8090",
-        "http://localhost:8090", "https://localhost:8090"
+        "http://localhost:8090", "https://localhost:8090",
+        "http://${address}:8091", "https://${address}:8091",
+        "http://localhost:8091", "https://localhost:8091"
       ]
     }
   }
 }
 JSON
-    echo "Created ${run_dir}/config (model.json, config.json) for the address ${address}."
-    echo "Copy your Xentara licence file(s) into ${run_dir}/licence, then run: ./lab.sh up"
+    # By default remote clients may only read. The "Operator" role may also write (the dashboard and the Inspector write
+    # the set point, the pump speed and so on). The user "admin" gets this role; set its password with ./lab.sh password.
+    cat > "${run_dir}/config/security.json" <<JSON
+{
+  "roles": [ { "name": "Operator", "UUID": "$(python3 -c 'import uuid; print(uuid.uuid5(uuid.NAMESPACE_DNS, "operator.xentara-lab"))')" } ],
+  "ACL": { "entries": [ { "role": "Operator", "allow": ["write"] } ] }
+}
+JSON
+    cat > "${run_dir}/config/users.json" <<JSON
+{
+  "users": [ { "UUID": "$(python3 -c 'import uuid; print(uuid.uuid5(uuid.NAMESPACE_DNS, "admin.xentara-lab"))')", "userName": "admin", "roles": ["Operator"] } ]
+}
+JSON
+    echo "Created ${run_dir}/config (model.json, config.json, security.json, users.json) for the address ${address}."
+    echo "Copy your Xentara licence file(s) into ${run_dir}/licence, set the password of the user admin (./lab.sh password), then run: ./lab.sh up"
     ;;
 
   password)
@@ -61,7 +77,7 @@ JSON
   up)
     [ -f "${run_dir}/config/model.json" ] || { echo "Run './lab.sh init' first." >&2; exit 1; }
     $C network exists "${net}" 2> /dev/null || $C network create "${net}" > /dev/null
-    $C rm -f modbus-sim xentara > /dev/null 2>&1 || true
+    $C rm -f modbus-sim xentara xentara-dashboard > /dev/null 2>&1 || true
     $C run -d --name modbus-sim --network "${net}" --init -p 5020:5020 modbus-sim > /dev/null
     # SYS_NICE and the rtprio limit allow real-time scheduling inside the container
     $C run -d --name xentara --network "${net}" --init \
@@ -71,9 +87,12 @@ JSON
         -v "${run_dir}/config:/config:Z" \
         -v "${run_dir}/licence:/usr/local/share/xentara/licence:ro,Z" \
         xentara-ubi10 > /dev/null
+    # the dashboard is a web page: the browser talks to Xentara directly (port 19670), like the Xentara Inspector
+    $C run -d --name xentara-dashboard --restart unless-stopped -p 8091:8080 xentara-dashboard > /dev/null
     sleep 2
     $C ps --format '{{.Names}}  {{.Status}}  {{.Ports}}'
     echo
+    echo "Dashboard: http://${address}:8091   (log in with the Xentara user; the first time accept the certificate at https://${address}:19670)"
     echo "Follow the log with: ./lab.sh logs xentara"
     ;;
 
@@ -83,7 +102,7 @@ JSON
 
   status)
     $C ps -a --format '{{.Names}}  {{.Status}}  {{.Ports}}'
-    ss -ltn 2> /dev/null | grep -E ':(19670|5020)\b' || echo "(nothing listening on 19670 / 5020)"
+    ss -ltn 2> /dev/null | grep -E ':(19670|5020|8091)\b' || echo "(nothing listening on 19670 / 5020 / 8091)"
     ;;
 
   licence-id)
@@ -91,7 +110,7 @@ JSON
     ;;
 
   down)
-    $C rm -f modbus-sim xentara > /dev/null 2>&1 || true
+    $C rm -f modbus-sim xentara xentara-dashboard > /dev/null 2>&1 || true
     $C network rm "${net}" > /dev/null 2>&1 || true
     echo "stopped"
     ;;

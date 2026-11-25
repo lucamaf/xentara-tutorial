@@ -128,7 +128,7 @@ You do **not** need to add your user to `realtime` for the systemd service (**do
 | Topic | RHEL 10 notes |
 |---|---|
 | **Time synchronisation** | Xentara recommends `chrony` instead of `systemd-timesyncd` (**docs**). RHEL already uses `chronyd`, and it was active on the VM (**verified**). Check with `chronyc tracking`. |
-| **Real-time kernel** | Real-time tasks need a `PREEMPT_RT` kernel (**docs**). On RHEL that is the `kernel-rt` package from the "RHEL for Real Time" repository, which needs the matching subscription. Check with `uname -v`. The example model doesn't need it. *(RHEL package name not verified here.)* |
+| **Real-time kernel** | Real-time tasks need a `PREEMPT_RT` kernel (**docs**). On RHEL that is the `kernel-rt` package from the "RHEL for Real Time" repository, which needs the matching subscription. Check with `uname -v`. The example model doesn't need it. |
 | **Core isolation** | Docs example: `isolcpus=14,15 rcu_nocbs=14,15 rcu_nocb_poll` on the kernel command line (**docs**, uses Debian's `update-grub`). On RHEL: `sudo grubby --update-kernel=ALL --args="isolcpus=14,15 rcu_nocbs=14,15 rcu_nocb_poll"`, then reboot. *(RHEL command not tested here.)* |
 
 ## 8. Xentara Inspector (web UI)
@@ -197,6 +197,17 @@ Then set the password (it asks for it and stores it in the password file):
 xentara-password admin
 ```
 
+**2b. Allow writing (optional).** By default, remote clients (the Inspector, the dashboard in `xentara-lab/dashboard`) may only read: every write is refused with `access denied (-32102)` (**verified**). Give the user a role that may write. Create `~/.config/xentara/security.json`:
+
+```json
+{
+  "roles": [ { "name": "Operator", "UUID": "<output of uuidgen>" } ],
+  "ACL": { "entries": [ { "role": "Operator", "allow": ["write"] } ] }
+}
+```
+
+and add the role to the user in `users.json`: `{ "UUID": "...", "userName": "admin", "roles": ["Operator"] }`. Everyone else stays read-only.
+
 **3. Restart and check that it listens:**
 
 ```bash
@@ -223,6 +234,16 @@ curl -I http://localhost:8090      # expect HTTP/1.1 200 OK
 
 Run the Inspector on the same machine as Xentara: it looks for Xentara on the host it was loaded from (**docs**).
 
+## 9. Xentara Inspector (web UI)  
+
+An example based on a water tank simulated model is avalailable in the folder `./xentara-lab`.  
+The model is running as python code with modbus communication, Xentara model is leveraging the modbus plugin to connect to it and read/write to registries.  Additionally an HTML dashboard is present to visualize the model live (and can drive the model, writing registers through Xentara).  
+
+![alt text](<Screenshot From 2026-11-25 14-44-51.png>)
+
+![alt text](<Screenshot From 2026-11-25 14-45-05.png>)
+
+
 ## Troubleshooting
 
 | Symptom | Cause and fix |
@@ -234,6 +255,7 @@ Run the Inspector on the same machine as Xentara: it looks for Xentara on the ho
 | Inspector: "Could not connect to Xentara", nothing on port 19670 | No `config.json` with `httpServer`, or Xentara was not restarted. See step 8. Check with `sudo ss -ltnp \| grep :19670`. |
 | Xentara stops with `could not find the TLS certificate file` | Step 1b: create `~/.config/xentara/certs/xentara.pem` and `private/xentara.key.pem`. |
 | Browser rejects the certificate for the IP address | The certificate has no `subjectAltName` for that address. Recreate it with `-addext "subjectAltName=IP:<address>,DNS:localhost"`. |
+| Writing from the Inspector or the dashboard fails with `access denied (-32102)` | The role of the user has no `write` entitlement. See step 2b (security.json and the role in users.json), restart Xentara. |
 | Inspector: login refused (401), CORS is fine | Only `Bearer` is enabled. Add `"authentication": { "schemes": ["Bearer", "Basic"] }` to `httpServer`, restart, and test with `curl -sk -u admin -X POST https://<address>:19670/api/v1/request-token`. |
 | Inspector: CORS error at login | Add the exact origin from the error message (check `http` vs `https`, IP vs `localhost`) to `httpServer.CORS.allowedOrigins`, restart Xentara. |
 | Skill missing from the list | Hidden on purpose: it needs Debian's libcurl, which isn't compatible. |

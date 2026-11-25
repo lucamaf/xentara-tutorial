@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tank Station Dashboard</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect x=%279%27 y=%273%27 width=%2714%27 height=%2726%27 rx=%273%27 fill=%27none%27 stroke=%27%234a5667%27 stroke-width=%272.5%27/%3E%3Crect x=%2710.2%27 y=%2716%27 width=%2711.6%27 height=%2711.8%27 fill=%27%233d8bd9%27/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="dashboard.css">
+</head>
+<body>
+  <header>
+    <h1>Tank station</h1>
+    <span id="status" class="chip" data-state="idle" role="status">Not connected</span>
+    <span class="spacer"></span>
+    <button id="connection-toggle" type="button" aria-expanded="true" aria-controls="connect">Connection</button>
+  </header>
+
+  <section id="connect" class="panel">
+    <form id="connect-form">
+      <label>Xentara <input id="host" name="host" value="localhost:19670" size="22" spellcheck="false"></label>
+      <label>User <input id="user" name="user" value="admin" size="10" spellcheck="false" autocomplete="username"></label>
+      <label>Password <input id="password" name="password" type="password" size="12" autocomplete="current-password"></label>
+      <button id="connect-button" type="submit">Connect to Xentara</button>
+      <button id="demo-button" type="button">Demo (no Xentara)</button>
+      <button id="disconnect-button" type="button">Disconnect</button>
+    </form>
+    <p class="hint">
+      The page talks to Xentara's WebSocket interface and shows the data points of the <code>Plant</code> group.
+      First time: open <a id="cert-link" href="#" target="_blank" rel="noopener">https://&lt;xentara&gt;</a> once and accept the self-signed certificate.
+      Xentara's <code>config.json</code> must allow this page's origin (<code id="origin"></code>) in <code>httpServer.CORS.allowedOrigins</code>.
+    </p>
+    <p id="error" class="error" hidden></p>
+  </section>
+
+  <main>
+    <section class="panel tank-panel" aria-label="Tank">
+      <svg id="tank" viewBox="0 0 420 470" role="img" aria-label="Tank with pump and outlet">
+        <defs>
+          <clipPath id="tank-clip"><rect x="150" y="40" width="140" height="340" rx="10"/></clipPath>
+        </defs>
+
+        <!-- pipes -->
+        <path class="pipe" d="M 98 330 H 150"/>
+        <path id="inlet-flow" class="pipe-flow" d="M 98 330 H 150"/>
+        <path class="pipe" d="M 290 360 H 380 V 440"/>
+        <path id="outlet-flow" class="pipe-flow" d="M 290 360 H 380 V 440"/>
+        <text class="label" x="386" y="405">outlet</text>
+
+        <!-- the tank -->
+        <rect class="tank-wall" x="150" y="40" width="140" height="340" rx="10"/>
+        <g clip-path="url(#tank-clip)">
+          <rect id="band" class="band" x="150" y="0" width="140" height="0"/>
+          <rect id="water" class="water" x="150" y="380" width="140" height="0"/>
+          <g id="wave-group" transform="translate(150 380)"><path class="wave" d="M -70 0 q 17.5 -6 35 0 t 35 0 t 35 0 t 35 0 t 35 0 t 35 0 t 35 0 V 12 H -70 Z"/></g>
+        </g>
+        <rect class="tank-wall-outline" x="150" y="40" width="140" height="340" rx="10"/>
+
+        <!-- scale and alarm limits -->
+        <g id="ticks"></g>
+        <line id="high-line" class="alarm-line" x1="150" x2="290" y1="74" y2="74"/>
+        <line id="low-line" class="alarm-line" x1="150" x2="290" y1="346" y2="346"/>
+        <text class="label alarm-label" x="286" y="70" text-anchor="end">high 90 %</text>
+        <text class="label alarm-label" x="286" y="342" text-anchor="end">low 10 %</text>
+
+        <!-- set point marker -->
+        <g id="setpoint" transform="translate(0 210)">
+          <line class="setpoint-line" x1="150" x2="290" y1="0" y2="0"/>
+          <path class="setpoint-arrow" d="M 294 0 l 12 -7 v 14 z"/>
+          <text id="setpoint-label" class="label setpoint-label" x="310" y="4">set point</text>
+        </g>
+
+        <text id="level-text" class="level-text" x="220" y="215" text-anchor="middle">-- %</text>
+
+        <!-- pump -->
+        <g id="pump">
+          <circle id="pump-body" class="pump-body" cx="70" cy="330" r="28"/>
+          <g id="impeller" class="impeller" transform="translate(70 330)">
+            <path d="M 0 0 L 0 -20 M 0 0 L 17.3 10 M 0 0 L -17.3 10"/>
+          </g>
+          <text class="label" x="70" y="378" text-anchor="middle">pump</text>
+          <text id="pump-text" class="label strong" x="70" y="292" text-anchor="middle">--</text>
+        </g>
+      </svg>
+    </section>
+
+    <section class="side">
+      <section class="panel readings" aria-label="Readings">
+        <h2>Model values</h2>
+        <div class="tiles">
+          <div class="tile"><span class="name">Level</span><span class="big" id="v-level">--</span><span class="unit">%</span></div>
+          <div class="tile"><span class="name">Temperature</span><span class="big" id="v-temperature">--</span><span class="unit">&deg;C</span></div>
+          <div class="tile"><span class="name">Flow</span><span class="big" id="v-flow">--</span><span class="unit">l/min</span></div>
+          <div class="tile"><span class="name">Total pumped</span><span class="big" id="v-total">--</span><span class="unit">l</span></div>
+          <div class="tile lamp-tile"><span class="lamp" id="lamp-pump"></span><span class="name">Pump running</span></div>
+          <div class="tile lamp-tile"><span class="lamp alarm" id="lamp-high"></span><span class="name">High level alarm</span></div>
+          <div class="tile lamp-tile"><span class="lamp alarm" id="lamp-low"></span><span class="name">Low level alarm</span></div>
+          <div class="tile lamp-tile"><span class="lamp" id="lamp-quality"></span><span class="name" id="quality-text">Data quality</span></div>
+        </div>
+      </section>
+
+      <section class="panel controls" aria-label="Inputs">
+        <h2>Inputs <small>written to the model</small></h2>
+
+        <div class="control">
+          <label for="in-setpoint">Level set point <output id="out-setpoint">50</output> %</label>
+          <input id="in-setpoint" type="range" min="0" max="100" step="1" value="50">
+          <span class="readback" id="rb-setpoint">model: --</span>
+        </div>
+        <div class="control">
+          <label for="in-speed">Pump speed <output id="out-speed">60</output> %</label>
+          <input id="in-speed" type="range" min="0" max="100" step="5" value="60">
+          <span class="readback" id="rb-speed">model: --</span>
+        </div>
+        <div class="control switches">
+          <label class="switch"><input id="in-auto" type="checkbox" checked> <span>Automatic level control</span></label>
+          <label class="switch"><input id="in-enable" type="checkbox"> <span>Pump on (manual mode)</span></label>
+          <button id="ack-button" type="button">Acknowledge alarms</button>
+        </div>
+        <div class="scenarios">
+          <span>Try:</span>
+          <button type="button" data-scenario="fill">Fill to 80 %</button>
+          <button type="button" data-scenario="drain">Drain to 20 %</button>
+          <button type="button" data-scenario="overfill">Manual: overfill</button>
+          <button type="button" data-scenario="reset">Reset</button>
+        </div>
+        <p id="write-status" class="write-status" role="status">No inputs sent yet.</p>
+      </section>
+    </section>
+
+    <section class="panel trend-panel" aria-label="Trend">
+      <h2>Last 5 minutes</h2>
+      <svg id="trend" viewBox="0 0 1000 230" role="img" aria-label="Trend of level, set point and temperature"></svg>
+      <div class="legend">
+        <span><i class="swatch level"></i> level %</span>
+        <span><i class="swatch setpoint"></i> set point %</span>
+        <span><i class="swatch temperature"></i> temperature &deg;C (right axis)</span>
+      </div>
+    </section>
+  </main>
+
+  <script src="cbor.js"></script>
+  <script src="xentara.js"></script>
+  <script src="mock.js"></script>
+  <script src="dashboard.js"></script>
+</body>
+</html>

@@ -22,7 +22,10 @@ The Tank class is plain Python (the physics and the controls). pymodbus does the
 `action` function below, which runs on every Modbus request: it advances the tank to the current time, applies
 writes, and refreshes the table that is being accessed from the tank.
 
-Usage:  python3 modbus_sim.py [--host 0.0.0.0] [--port 5020] [--verbose]
+Usage:  python3 modbus_sim.py [--host 0.0.0.0] [--port 5020] [--unit-id 0] [--verbose]
+
+  --verbose  prints every client connection and every request (reads too), with the unit ID the client uses.
+             Xentara polls twice per cycle, so this is a few lines per second.
 """
 import argparse
 import asyncio
@@ -150,8 +153,10 @@ def pack_bits(bits: list[bool]) -> list[int]:
     return [sum(1 << i for i, bit in enumerate(bits[n:n + 16]) if bit) for n in range(0, len(bits), 16)]
 
 
-def build_device(tank: Tank, unit_id: int = 1, clock=time.monotonic, log=None) -> SimDevice:
-    """The pymodbus device: four tables (coils, discrete inputs, holding registers, input registers) and the action"""
+def build_device(tank: Tank, unit_id: int = 0, clock=time.monotonic) -> SimDevice:
+    """The pymodbus device: four tables (coils, discrete inputs, holding registers, input registers) and the action.
+
+    unit_id 0 means that the device answers to any unit ID (Modbus TCP devices usually ignore it)."""
     last = [clock()]
 
     async def action(function_code, start_address, address, count, registers, set_values):
@@ -169,8 +174,6 @@ def build_device(tank: Tank, unit_id: int = 1, clock=time.monotonic, log=None) -
             elif function_code in (6, 16):
                 for i, value in enumerate(set_values):
                     write_holding_register(tank, address + i, int(value))
-            if log:
-                log(f'write function {function_code} at {address}: {list(set_values)}')
 
         # 3. show the current state of the tank in the table that is being accessed
         if function_code in (1, 5, 15):
@@ -195,20 +198,46 @@ def build_device(tank: Tank, unit_id: int = 1, clock=time.monotonic, log=None) -
     )
 
 
-async def serve(host: str, port: int, verbose: bool) -> None:
-    log = (lambda message: print(f'[{time.strftime("%H:%M:%S")}] {message}', flush=True)) if verbose else None
-    print(f'Modbus TCP water-tank simulator listening on {host}:{port}', flush=True)
-    await StartAsyncTcpServer(context=build_device(Tank(), log=log), address=(host, port))
+def log(message: str) -> None:
+    print(f'[{time.strftime("%H:%M:%S")}] {message}', flush=True)
+
+
+def describe(pdu) -> str:
+    """A request in one short line, e.g. "unit 1: ReadInputRegisters address 0 count 6" """
+    name = type(pdu).__name__.removesuffix('Request')
+    text = f'unit {pdu.dev_id}: {name} address {pdu.address}'
+    values = list(getattr(pdu, 'registers', None) or getattr(pdu, 'bits', None) or [])
+    if values:
+        text += f' values {values}'
+    elif getattr(pdu, 'count', None):
+        text += f' count {pdu.count}'
+    return text
+
+
+def trace_pdu(sending: bool, pdu):
+    """pymodbus calls this for every request and response. It must return the PDU."""
+    if not sending:
+        log(f'<- {describe(pdu)}')
+    return pdu
+
+
+async def serve(host: str, port: int, unit_id: int, verbose: bool) -> None:
+    print(f'Modbus TCP water-tank simulator listening on {host}:{port} (unit ID: {unit_id or "any"})', flush=True)
+    tracing = {}
+    if verbose:
+        tracing = {'trace_connect': lambda connected: log('client connected' if connected else 'client disconnected'), 'trace_pdu': trace_pdu}
+    await StartAsyncTcpServer(context=build_device(Tank(), unit_id), address=(host, port), **tracing)
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Modbus TCP water-tank simulator')
     parser.add_argument('--host', default='0.0.0.0')
     parser.add_argument('--port', type=int, default=5020, help='TCP port (default 5020; 502 needs root)')
-    parser.add_argument('--verbose', action='store_true', help='log writes')
+    parser.add_argument('--unit-id', type=int, default=0, help='Modbus unit ID to answer to (default 0: any)')
+    parser.add_argument('--verbose', action='store_true', help='log connections and every request')
     args = parser.parse_args()
     signal.signal(signal.SIGTERM, signal.default_int_handler)  # as PID 1 of a container: stop like on Ctrl+C
     try:
-        asyncio.run(serve(args.host, args.port, args.verbose))
+        asyncio.run(serve(args.host, args.port, args.unit_id, args.verbose))
     except KeyboardInterrupt:
         pass

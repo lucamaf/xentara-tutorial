@@ -9,6 +9,7 @@ xentara-lab/
   simulator/modbus_sim.py    Modbus TCP simulator (Python + pymodbus; also requirements.txt, Containerfile, tests)
   model/make_plant_model.py  generates model/modbus-plant.json (stable UUIDs)
   model/modbus-plant.json    the Xentara model (device address 127.0.0.1:5020)
+  dashboard/                 web dashboard of the model (HTML/JS, no build) + container image (nginx on UBI 10)
   lab.sh                     builds and runs everything with podman
 ```
 
@@ -79,6 +80,19 @@ sequenceDiagram
     SV-->>DV: 700 (read back, confirms the write)
 ```
 
+## Dashboard: see the effect of changing the inputs
+
+[`dashboard/`](dashboard/README.md) is a web page that shows the model live (tank with water level, set point and controller band, pump, flow, temperature, alarms, a 5 minute trend) and lets you change the inputs: set point, pump speed, automatic or manual control, pump on, acknowledge alarms. It talks directly from the browser to Xentara's WebSocket interface, like the Xentara Inspector, so every change goes through the whole chain and the page shows how long the model took to confirm it (about half a second).
+
+![The dashboard connected to Xentara](dashboard/screenshot-live.png)
+
+```bash
+podman build --format docker -t xentara-dashboard -f dashboard/Containerfile dashboard
+podman run -d --name xentara-dashboard -p 8091:8080 xentara-dashboard        # http://<host>:8091
+```
+
+`./lab.sh up` starts it with the rest of the lab. Or open `dashboard/index.html` and press **Demo** to try it without Xentara. Its requirements on the Xentara side (certificate, CORS origin, login, and **write access**) are in [dashboard/README.md](dashboard/README.md).
+
 ## 1. The simulator
 
 A water tank with a pump, an outlet and a level controller. Unit ID: any. Default port 5020 (502 needs root).
@@ -105,6 +119,16 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt       # pymod
 .venv/bin/python -m unittest -v test_modbus_sim                            # 15 tests: physics, table mapping, and the whole device with a pymodbus client
 ```
 
+`--verbose` prints every client connection and every request with the unit ID the client uses (Xentara polls twice per cycle, so expect a few lines per second):
+
+```
+[11:11:57] client connected
+[11:11:57] <- unit 1: ReadInputRegisters address 0 count 6
+[11:11:57] <- unit 1: WriteSingleRegister address 0 values [650]
+```
+
+The simulator answers any unit ID by default (`--unit-id N` restricts it). **If Xentara is running and you see no `client connected` line,** Xentara is not reaching the simulator: check the `address` of the `Tank Station PLC` element in the model (host and port; `127.0.0.1` only works when Xentara and the simulator run on the same machine), that the simulator listens on that port (`ss -ltn | grep 5020`), and the firewall between the two machines.
+
 On the RHEL VM, `sudo dnf install python3-pip` provides pip; or run the container (`./lab.sh build`), which needs nothing installed.
 
 ## 2. The model
@@ -116,6 +140,18 @@ On the RHEL VM, `sudo dnf install python3-pip` provides pip; or run the containe
 - `Plant`: the process data points with display names and units: what an operator or the Inspector sees.
 - `Modbus Track`: a 500 ms poll timer drives `Poll Inputs.execute`, `Poll Outputs.execute`, `writeOutputs` and `Inspector.dump` (in this order, in one segment); a 10 s timer drives `reconnect`. All tasks of the device are in one track, as the driver requires.
 - `Inspector`: prints the main values to the log.
+
+**Order matters.** Xentara loads the model in file order and needs a *converted value* to be defined **before the data points that read it**. Otherwise it stops at start-up with `FATAL ERROR: ... model.json (line N): data point supports neither input nor output direction` (**verified** on Xentara 2.1.1 by trying the orders below). The generator therefore lists the device first, then the conversions, then the process data points.
+
+| Order of the top-level elements | Result |
+|---|---|
+| device, conversions, plant, track, inspector | starts |
+| conversions, plant, device, track, inspector | starts (the raw channels may come after the conversion) |
+| plant, conversions, device, ... | fails |
+| plant, device, conversions, ... | fails |
+| device, plant, conversions, ... | fails |
+
+A data point that reads a Modbus channel directly (no conversion) may come before the device. The VS Code extension reports a converted value that comes after a data point reading it.
 
 Regenerate it for another device address: `python3 model/make_plant_model.py modbus-sim:5020 model.json`.
 
@@ -154,5 +190,7 @@ Real-time scheduling needs `--cap-add SYS_NICE --ulimit rtprio=99` (done by `lab
 - Simulator: 15 tests, including the whole device driven by a pymodbus client (reads and writes of all four tables, function codes 1-6/15/16, float32 and uint32 word order, momentary alarm acknowledge, exceptions, time passing between requests), and a check of the container from outside.
 - Model: valid against the core schema, no problems in the VS Code extension's validator (including Modbus task/attribute names), all UUIDs unique; renaming the device updates all 27 references.
 - Container: builds in about 40 s (261 MB), `xentara --version` runs, no unresolved libraries (including `libmodbus5` converted from Debian), runs as UID 10001, reaches the licence check with the plant model.
+- **Dashboard against the real Xentara (headless Chrome, page served by the container, Xentara on the VM with a temporary configuration, simulator on the host):** login, token, WebSocket, subscription of 11 data points with quality 0, and all writes (set point, pump speed, auto mode, pump enable, alarm acknowledge) confirmed by the model after about 0.5 s; the simulator received the matching `WriteSingleRegister` and `WriteSingleCoil` requests. This also verified **coil writes**. Without a role that may write, every write is refused with `access denied (-32102)`.
+- **Xentara with the simulator (on the licensed RHEL 10 VM, simulator on the host at 192.168.122.1:5020, temporary model in /tmp):** the model loads and Xentara reads the simulator through the Modbus driver with quality `good`: level 45.6 % and temperature 23.1 °C (converted from the raw registers), flow 901.03 l/min (float32 `floatABCD` and word order confirmed: 25 l/s x 60 % x 60 = 900), total volume 391 l (`uint32`), pump running, alarms clear, set point 50 %, pump speed 60 %, auto mode on. **Write path:** `write "Plant.Level Setpoint" = 70` in `xentara-debugger` made the simulator log `write function 6 at 0: [700]` (the converted value is converted back to the raw register and sent by `writeOutputs`), the set point read back as 70 from the device, and the level rose toward it.
 
-**Not verified yet** (needs a valid licence for the machine): Xentara reading the simulator through the Modbus driver. The JSON property names and values of the Modbus elements come from the driver documentation (`format` values such as `uint32`/`floatABCD`, `poll`, `serverID`, `address`), which the core schema does not check. If a value is wrong, the Xentara log will name it.
+**Not verified yet:** the Xentara container with a licence (needs the licence ID comparison, see above); reconnect after the simulator is stopped; the dashboard container started by `lab.sh up` (its parts were tested separately); the `Inspector` Docker image reading this model.

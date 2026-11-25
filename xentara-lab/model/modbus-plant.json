@@ -2,175 +2,6 @@
   "$schema": "https://docs.xentara.io/xentara/schema-xentara-model.json",
   "children": [
     {
-      "@Group": {
-        "name": "Plant",
-        "UUID": "fbcfb233-7e24-54a7-aa7e-915320e030ec",
-        "children": [
-          {
-            "@DataPoint": {
-              "name": "Tank Level",
-              "UUID": "168724c0-945f-5c67-a573-b17381020075",
-              "displayName": "Tank fill level",
-              "io": "Conversions.Tank Level",
-              "units": "%"
-            }
-          },
-          {
-            "@DataPoint": {
-              "name": "Temperature",
-              "UUID": "85e4d61e-37a3-59d2-983f-a47eb81a88bd",
-              "displayName": "Water temperature",
-              "io": "Conversions.Temperature",
-              "units": "°C"
-            }
-          },
-          {
-            "@DataPoint": {
-              "name": "Flow Rate",
-              "UUID": "0cb5d248-6e86-5a9c-a0bd-446eb526ae4a",
-              "displayName": "Pump flow rate",
-              "io": "Tank Station PLC.Flow Raw",
-              "units": "l/min"
-            }
-          },
-          {
-            "@DataPoint": {
-              "name": "Total Volume",
-              "UUID": "646f7e9e-b491-56a6-9f3d-ff132e1a1849",
-              "displayName": "Total volume pumped",
-              "io": "Tank Station PLC.Total Volume Raw",
-              "units": "l"
-            }
-          },
-          {
-            "@DataPoint": {
-              "name": "Pump Running",
-              "UUID": "d9382478-cec3-57b6-8d99-bae8aab7212d",
-              "displayName": "Pump is running",
-              "io": "Tank Station PLC.Pump Running"
-            }
-          },
-          {
-            "@DataPoint": {
-              "name": "High Level Alarm",
-              "UUID": "8c2173d9-7e02-5f6c-8f5b-2b2fea1f77c9",
-              "displayName": "Level above 90 % (latched)",
-              "io": "Tank Station PLC.High Level Alarm"
-            }
-          },
-          {
-            "@DataPoint": {
-              "name": "Low Level Alarm",
-              "UUID": "e206e583-1476-5e21-a5b0-6ea838f87b22",
-              "displayName": "Level below 10 % (latched)",
-              "io": "Tank Station PLC.Low Level Alarm"
-            }
-          },
-          {
-            "@DataPoint": {
-              "name": "Level Setpoint",
-              "UUID": "148bcd09-d3b9-533f-a4d5-eed0fecb8e10",
-              "displayName": "Level set point (writable)",
-              "io": "Conversions.Level Setpoint",
-              "units": "%"
-            }
-          },
-          {
-            "@DataPoint": {
-              "name": "Pump Speed",
-              "UUID": "ca6cc2a8-1484-5614-bb66-a04aa5b186a0",
-              "displayName": "Pump speed (writable)",
-              "io": "Tank Station PLC.Pump Speed Raw",
-              "units": "%"
-            }
-          },
-          {
-            "@DataPoint": {
-              "name": "Pump Enable",
-              "UUID": "e0b9a532-6b0f-5f44-a939-4e21c795316e",
-              "displayName": "Pump command in manual mode (writable)",
-              "io": "Tank Station PLC.Pump Enable"
-            }
-          },
-          {
-            "@DataPoint": {
-              "name": "Auto Mode",
-              "UUID": "81e6a903-fbec-532e-85b0-a306d69a6b84",
-              "displayName": "Automatic level control (writable)",
-              "io": "Tank Station PLC.Auto Mode"
-            }
-          },
-          {
-            "@DataPoint": {
-              "name": "Alarm Acknowledge",
-              "UUID": "b97f5164-3d9d-5c6a-b4d7-3973161264ff",
-              "displayName": "Acknowledge latched alarms (write true)",
-              "io": "Tank Station PLC.Alarm Acknowledge"
-            }
-          }
-        ]
-      }
-    },
-    {
-      "@Group": {
-        "name": "Conversions",
-        "UUID": "8dcd642b-ab6b-5922-a815-fdf8b5c1b53e",
-        "children": [
-          {
-            "@Skill.SignalProcessing.ConvertedValue": {
-              "name": "Tank Level",
-              "UUID": "b13fb3b1-a2a9-5f52-a93b-419a90c5a4ec",
-              "rawValue": "Tank Station PLC.Level Raw",
-              "mappings": [
-                {
-                  "raw": 0,
-                  "mapped": 0
-                },
-                {
-                  "raw": 1000,
-                  "mapped": 100
-                }
-              ]
-            }
-          },
-          {
-            "@Skill.SignalProcessing.ConvertedValue": {
-              "name": "Temperature",
-              "UUID": "4acb323c-c74b-5420-904f-33c61aa4b4d3",
-              "rawValue": "Tank Station PLC.Temperature Raw",
-              "mappings": [
-                {
-                  "raw": -200,
-                  "mapped": -20
-                },
-                {
-                  "raw": 1500,
-                  "mapped": 150
-                }
-              ]
-            }
-          },
-          {
-            "@Skill.SignalProcessing.ConvertedValue": {
-              "name": "Level Setpoint",
-              "UUID": "9604a067-85d2-5950-8c08-5eb662d9347a",
-              "rawValue": "Tank Station PLC.Level Setpoint Raw",
-              "mappings": [
-                {
-                  "raw": 0,
-                  "mapped": 0
-                },
-                {
-                  "raw": 1000,
-                  "mapped": 100
-                }
-              ]
-            }
-          }
-        ]
-      }
-    },
-    {
       "@Skill.Modbus.TCPDevice": {
         "name": "Tank Station PLC",
         "UUID": "de01e05a-f09b-5aab-9b2c-457024bba2a6",
@@ -288,6 +119,175 @@
               "name": "Alarm Acknowledge",
               "UUID": "cd358598-f96d-5d4a-97d9-18f7acd75e07",
               "address": 2
+            }
+          }
+        ]
+      }
+    },
+    {
+      "@Group": {
+        "name": "Conversions",
+        "UUID": "8dcd642b-ab6b-5922-a815-fdf8b5c1b53e",
+        "children": [
+          {
+            "@Skill.SignalProcessing.ConvertedValue": {
+              "name": "Tank Level",
+              "UUID": "b13fb3b1-a2a9-5f52-a93b-419a90c5a4ec",
+              "rawValue": "Tank Station PLC.Level Raw",
+              "mappings": [
+                {
+                  "raw": 0,
+                  "mapped": 0
+                },
+                {
+                  "raw": 1000,
+                  "mapped": 100
+                }
+              ]
+            }
+          },
+          {
+            "@Skill.SignalProcessing.ConvertedValue": {
+              "name": "Temperature",
+              "UUID": "4acb323c-c74b-5420-904f-33c61aa4b4d3",
+              "rawValue": "Tank Station PLC.Temperature Raw",
+              "mappings": [
+                {
+                  "raw": -200,
+                  "mapped": -20
+                },
+                {
+                  "raw": 1500,
+                  "mapped": 150
+                }
+              ]
+            }
+          },
+          {
+            "@Skill.SignalProcessing.ConvertedValue": {
+              "name": "Level Setpoint",
+              "UUID": "9604a067-85d2-5950-8c08-5eb662d9347a",
+              "rawValue": "Tank Station PLC.Level Setpoint Raw",
+              "mappings": [
+                {
+                  "raw": 0,
+                  "mapped": 0
+                },
+                {
+                  "raw": 1000,
+                  "mapped": 100
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "@Group": {
+        "name": "Plant",
+        "UUID": "fbcfb233-7e24-54a7-aa7e-915320e030ec",
+        "children": [
+          {
+            "@DataPoint": {
+              "name": "Tank Level",
+              "UUID": "168724c0-945f-5c67-a573-b17381020075",
+              "displayName": "Tank fill level",
+              "io": "Conversions.Tank Level",
+              "units": "%"
+            }
+          },
+          {
+            "@DataPoint": {
+              "name": "Temperature",
+              "UUID": "85e4d61e-37a3-59d2-983f-a47eb81a88bd",
+              "displayName": "Water temperature",
+              "io": "Conversions.Temperature",
+              "units": "°C"
+            }
+          },
+          {
+            "@DataPoint": {
+              "name": "Flow Rate",
+              "UUID": "0cb5d248-6e86-5a9c-a0bd-446eb526ae4a",
+              "displayName": "Pump flow rate",
+              "io": "Tank Station PLC.Flow Raw",
+              "units": "l/min"
+            }
+          },
+          {
+            "@DataPoint": {
+              "name": "Total Volume",
+              "UUID": "646f7e9e-b491-56a6-9f3d-ff132e1a1849",
+              "displayName": "Total volume pumped",
+              "io": "Tank Station PLC.Total Volume Raw",
+              "units": "l"
+            }
+          },
+          {
+            "@DataPoint": {
+              "name": "Pump Running",
+              "UUID": "d9382478-cec3-57b6-8d99-bae8aab7212d",
+              "displayName": "Pump is running",
+              "io": "Tank Station PLC.Pump Running"
+            }
+          },
+          {
+            "@DataPoint": {
+              "name": "High Level Alarm",
+              "UUID": "8c2173d9-7e02-5f6c-8f5b-2b2fea1f77c9",
+              "displayName": "Level above 90 % (latched)",
+              "io": "Tank Station PLC.High Level Alarm"
+            }
+          },
+          {
+            "@DataPoint": {
+              "name": "Low Level Alarm",
+              "UUID": "e206e583-1476-5e21-a5b0-6ea838f87b22",
+              "displayName": "Level below 10 % (latched)",
+              "io": "Tank Station PLC.Low Level Alarm"
+            }
+          },
+          {
+            "@DataPoint": {
+              "name": "Level Setpoint",
+              "UUID": "148bcd09-d3b9-533f-a4d5-eed0fecb8e10",
+              "displayName": "Level set point (writable)",
+              "io": "Conversions.Level Setpoint",
+              "units": "%"
+            }
+          },
+          {
+            "@DataPoint": {
+              "name": "Pump Speed",
+              "UUID": "ca6cc2a8-1484-5614-bb66-a04aa5b186a0",
+              "displayName": "Pump speed (writable)",
+              "io": "Tank Station PLC.Pump Speed Raw",
+              "units": "%"
+            }
+          },
+          {
+            "@DataPoint": {
+              "name": "Pump Enable",
+              "UUID": "e0b9a532-6b0f-5f44-a939-4e21c795316e",
+              "displayName": "Pump command in manual mode (writable)",
+              "io": "Tank Station PLC.Pump Enable"
+            }
+          },
+          {
+            "@DataPoint": {
+              "name": "Auto Mode",
+              "UUID": "81e6a903-fbec-532e-85b0-a306d69a6b84",
+              "displayName": "Automatic level control (writable)",
+              "io": "Tank Station PLC.Auto Mode"
+            }
+          },
+          {
+            "@DataPoint": {
+              "name": "Alarm Acknowledge",
+              "UUID": "b97f5164-3d9d-5c6a-b4d7-3973161264ff",
+              "displayName": "Acknowledge latched alarms (write true)",
+              "io": "Tank Station PLC.Alarm Acknowledge"
             }
           }
         ]

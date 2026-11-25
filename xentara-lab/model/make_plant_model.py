@@ -166,7 +166,10 @@ inspector = element(
 
 model = {
     '$schema': 'https://docs.xentara.io/xentara/schema-xentara-model.json',
-    'children': [plant, conversions, device, track, inspector],
+    # The order matters: Xentara needs a converted value to be defined BEFORE the data points that read it (otherwise it
+    # stops with "data point supports neither input nor output direction"). The Modbus channels that a converted value
+    # reads may come later, but the device is listed first anyway: hardware, then conversions, then process data.
+    'children': [device, conversions, plant, track, inspector],
 }
 
 with open(out, 'w') as f:
