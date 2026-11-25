@@ -3,3 +3,6 @@ xentara-vscode/
 CLAUDE.md
 PLAN-*
 licence.json
+
+#ignore python cache files
+__pycache__/

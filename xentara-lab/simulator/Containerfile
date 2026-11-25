@@ -1,0 +1,20 @@
+# The Modbus TCP water-tank simulator (Python + pymodbus) on UBI 10 minimal
+#
+#   podman build -t modbus-sim -f Containerfile .
+#   podman run --rm -p 5020:5020 modbus-sim
+FROM registry.access.redhat.com/ubi10/ubi-minimal
+
+RUN microdnf install -y python3 python3-pip && microdnf clean all
+
+# a virtual environment keeps pymodbus out of the system Python
+COPY requirements.txt /app/requirements.txt
+RUN python3 -m venv /opt/venv && /opt/venv/bin/pip install --no-cache-dir -r /app/requirements.txt
+
+COPY modbus_sim.py /app/modbus_sim.py
+
+USER 1001
+EXPOSE 5020
+# PYTHONUNBUFFERED: show the log lines immediately
+ENV PYTHONUNBUFFERED=1
+ENTRYPOINT ["/opt/venv/bin/python", "/app/modbus_sim.py"]
+CMD ["--port", "5020", "--verbose"]

@@ -1,0 +1,2 @@
+# pymodbus changes its server API between releases (the old datastore classes are removed in v4): use this version
+pymodbus==3.16.2

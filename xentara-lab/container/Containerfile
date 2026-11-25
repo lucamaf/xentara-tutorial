@@ -1,0 +1,84 @@
+# Xentara on Red Hat UBI 10
+#
+# Xentara is only published as Debian packages. The build therefore has two stages:
+#   1. "converter" (Debian 12 "bookworm"): adds the Xentara APT repository, downloads the packages (apt verifies the
+#      signed repository metadata and the package checksums), and converts them to RPM packages with alien.
+#   2. the runtime image (UBI 10): installs the RPMs with dnf. Nothing from the Debian stage except the RPMs is kept.
+#
+# This is not an officially supported way of running Xentara (see the notes in ../README.md). The image contains
+# proprietary software: keep it in a private registry.
+#
+#   podman build -t xentara-ubi10 -f Containerfile .
+#   podman build -t xentara-ubi10 --build-arg XENTARA_PACKAGES="xentara xentara-modbus-driver xentara-web-service" .
+
+ARG UBI_IMAGE=registry.access.redhat.com/ubi10/ubi
+ARG DEBIAN_IMAGE=docker.io/library/debian:bookworm
+
+# ----------------------------------------------------------------------------------------------------------------------
+FROM ${DEBIAN_IMAGE} AS converter
+
+# The APT suite: debian-bookworm/stable, or a version such as debian-bookworm/2.1
+ARG XENTARA_SUITE=debian-bookworm/stable
+# The Xentara packages to install: the base system and the skills you need
+ARG XENTARA_PACKAGES="xentara xentara-modbus-driver"
+# Debian libraries that the skills need and that UBI does not provide (libmodbus is in EPEL, not in UBI)
+ARG EXTRA_DEBS="libmodbus5"
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates wget gnupg alien fakeroot rpm dpkg-dev \
+ && rm -rf /var/lib/apt/lists/*
+
+# The signing key is downloaded over TLS, like in the installer script. apt then verifies everything else with it.
+RUN wget -q -O /usr/share/keyrings/xentara-archive-keyring.gpg https://download.xentara.io/apt/support-files/xentara-archive-keyring.gpg \
+ && echo "deb [signed-by=/usr/share/keyrings/xentara-archive-keyring.gpg] https://download.xentara.io/apt/ ${XENTARA_SUITE} non-free misc" \
+      > /etc/apt/sources.list.d/xentara.list
+
+WORKDIR /debs
+RUN apt-get update && apt-get download ${XENTARA_PACKAGES} ${EXTRA_DEBS} && ls -l /debs
+
+# Convert without the Debian maintainer scripts (they use Debian-only helpers like adduser and deb-systemd-helper).
+# What they would have done is done in the runtime stage.
+WORKDIR /rpms
+RUN for deb in /debs/*.deb; do fakeroot alien --to-rpm --keep-version "$deb"; done && ls -l /rpms
+
+# ----------------------------------------------------------------------------------------------------------------------
+FROM ${UBI_IMAGE}
+
+LABEL org.opencontainers.image.title="Xentara on UBI 10" \
+      org.opencontainers.image.description="Xentara real-time industrial platform (converted Debian packages). Unofficial." \
+      org.opencontainers.image.licenses="proprietary"
+
+COPY --from=converter /rpms/*.rpm /tmp/rpms/
+
+# openssl is used by the entry point to create a self-signed certificate for the HTTP server
+RUN dnf install -y /tmp/rpms/*.rpm openssl \
+ && dnf clean all \
+ && rm -rf /tmp/rpms /var/cache/dnf
+
+# The Debian packages install their libraries in the Debian multiarch directory, which is not in the library search path
+RUN arch="$(uname -m)" \
+ && case "$arch" in aarch64) dir=/usr/lib/aarch64-linux-gnu ;; armv7l) dir=/usr/lib/arm-linux-gnueabihf ;; *) dir=/usr/lib/x86_64-linux-gnu ;; esac \
+ && echo "$dir" > /etc/ld.so.conf.d/xentara.conf \
+ && ldconfig \
+ && xentara --version
+
+# Run as an unprivileged user. Group 0 owns the writable directories, so that the image also works with an
+# arbitrary user ID (as OpenShift assigns it).
+RUN useradd --uid 10001 --gid 0 --home-dir /home/xentara --create-home --shell /sbin/nologin xentara \
+ && mkdir -p /config /usr/local/share/xentara/licence \
+ && chown -R 10001:0 /config /home/xentara \
+ && chmod -R g=u /config /home/xentara
+
+COPY entrypoint.sh /usr/local/bin/xentara-entrypoint.sh
+RUN chmod 0755 /usr/local/bin/xentara-entrypoint.sh
+
+ENV HOME=/home/xentara \
+    XENTARA_CONFIG_DIR=/config
+
+# /config:                           model.json, config.json, users.json, passwords.json, certs/, private/ ...
+# /usr/local/share/xentara/licence:  the Xentara licence files
+VOLUME ["/config"]
+EXPOSE 19670
+USER 10001
+
+ENTRYPOINT ["/usr/local/bin/xentara-entrypoint.sh"]
