@@ -234,7 +234,7 @@ curl -I http://localhost:8090      # expect HTTP/1.1 200 OK
 
 Run the Inspector on the same machine as Xentara: it looks for Xentara on the host it was loaded from (**docs**).
 
-## 9. Xentara Inspector (web UI)  
+## 9. Xentara water tank lab  
 
 An example based on a water tank simulated model is avalailable in the folder `./xentara-lab`.  
 The model is running as python code with modbus communication, Xentara model is leveraging the modbus plugin to connect to it and read/write to registries.  Additionally an HTML dashboard is present to visualize the model live (and can drive the model, writing registers through Xentara).  
