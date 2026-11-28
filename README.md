@@ -163,7 +163,7 @@ Two settings matter here, and both were needed on the test VM (**verified**: the
 - **`CORS.allowedOrigins`** must contain the exact origin (`scheme://host:port`, no trailing slash) of the address in the browser's URL bar. The browser loads the page from port 8090 and then connects to port 19670. `http://` and `https://` are different origins, and so are the IP address and `localhost`. Use your machine's address instead of `192.168.122.9`.
 - **`authentication.schemes`** must include `Basic`. By default the server only offers `Bearer` (`WWW-Authenticate: Bearer realm="Xentara"`), and the Inspector's username/password login is then refused with 401.
 
-**1b. Create a TLS certificate.** The HTTP server only speaks HTTPS and Xentara does not create a certificate itself. Without one, Xentara stops at start-up with `FATAL ERROR: HTTP server: could not find the TLS certificate file at ".../certs/xentara.pem"` (**verified** on the VM). It looks for the certificate and key in these places (**docs**), which must share the same base directory:
+**1b. Create a TLS certificate.** The HTTP server only speaks HTTPS and Xentara does not create a certificate itself. Without one, Xentara stops at start-up with `FATAL ERROR: HTTP server: could not find the TLS certificate file at ".../certs/xentara.pem"`. It looks for the certificate and key in these places (**docs**), which must share the same base directory:
 
 - `~/.config/xentara/certs/xentara.pem`, then `/etc/xdg/xentara/certs/xentara.pem`
 - `~/.config/xentara/private/xentara.key.pem`, then `/etc/xdg/xentara/private/xentara.key.pem`
